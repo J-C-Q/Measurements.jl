@@ -17,6 +17,8 @@
 
 import Printf
 
+print_concise::Bool = false
+
 function truncated_print(io::IO, m::Measurement, error_digits::Int;
                          atbeg = "", atend = "", pm = "±")
     val = if iszero(m.err) || !isfinite(m.err)
@@ -35,13 +37,41 @@ function truncated_print(io::IO, m::Measurement, error_digits::Int;
           round(m.err, sigdigits=error_digits), atend)
 end
 
+function concise_print(io::IO, m::Measurement, error_digits::Int;
+    atbeg="", atend="")
+    val = if iszero(m.err) || !isfinite(m.err)
+        m.val
+    else
+        # println(error_digits)
+        err_digits = -Base.hidigit(m.err, 10) + error_digits
+        digits = if isfinite(m.val)
+            max(-Base.hidigit(m.val, 10) + 2, err_digits)
+        else
+            err_digits
+        end
+        round(m.val, digits=digits)
+    end
+    print(io, atbeg, val,
+        "(",
+        "$(round(Int,round(m.err, sigdigits=error_digits)*10^err_digits))", ")", atend)
+end
+
+function concise!(concise::Bool=true)
+    global print_concise = concise
+    return print_concise
+end
+
 full_print(io::IO, measure::Measurement) =
     print(io, measure.val, get(io, :compact, false) ? "±" : " ± ", measure.err)
 
 function Base.show(io::IO, m::Measurement)
     error_digits = get(io, :error_digits, 2)
     if error_digits > 0
+        if print_concise
+            concise_print(io, m, error_digits)
+        else
             truncated_print(io, m, error_digits)
+        end
     elseif error_digits == 0
         full_print(io, m)
     else
@@ -60,6 +90,8 @@ for mime in (MIME"text/x-tex", MIME"text/x-latex")
         truncated_print(io, measure, error_digits, pm = "\\pm")
     end
 end
+
+
 
 # Representation of complex measurements.  Print something that is easy to
 # understand and that can be meaningfully copy-pasted into the REPL, at least
